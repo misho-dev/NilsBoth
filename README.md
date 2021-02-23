@@ -1,1 +1,2 @@
 # NilsBoth
+Discord music bot
