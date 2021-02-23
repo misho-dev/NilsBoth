@@ -32,13 +32,10 @@ async def play(ctx, *args: str):
     voice_channel = discord.utils.get(ctx.guild.voice_channels, name=channel_to_join_str)
 
     # find a song
-    await ctx.send('searching ' + term)
     song_object = get_song(term)
     if song_object is None:
         await ctx.send('sorry, nothing was found with given search term :(')
     else:
-        await ctx.send('playing ' + song_object.get('title') + "\n"
-                       + "https://www.youtube.com" + song_object.get("url_suffix"))
 
         # connect to voice
         try:
@@ -46,6 +43,14 @@ async def play(ctx, *args: str):
         except:
             print("voice already connected")
         voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
+        if voice.is_playing():
+            await ctx.send("Song already playing")
+            return
+        if voice.is_paused():
+            await ctx.send("Previoius song is paused")
+            return
+        await ctx.send('playing ' + song_object.get('title') + "\n"
+                       + "https://www.youtube.com" + song_object.get("url_suffix"))
 
         ydl_opts = {
             'format': 'bestaudio/best',
