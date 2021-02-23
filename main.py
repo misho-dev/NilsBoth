@@ -4,18 +4,20 @@ import os
 import youtube_dl
 from youtube_search import YoutubeSearch
 import env
+import asyncio
 
 client = commands.Bot(command_prefix="!")
-song_pool = ["song.mp3", "song1.mp3", "song2.mp3", "song3.mp3", "song4.mp3", "song5.mp3"]
 CURRENT_SONG = 0
 
-def getNextFromSongPool():
-    global CURRENT_SONG
-    CURRENT_SONG = (CURRENT_SONG + 1) % 6
-    return song_pool[CURRENT_SONG]
+loop = asyncio.get_event_loop()
+
+ffmpeg_options = {
+    'options': '-vn'
+}
 
 @client.command(pass_context=True)
 async def play(ctx, *args: str):
+    global loop
     term = " ".join(args[:])
 
     # determine channel
@@ -24,16 +26,6 @@ async def play(ctx, *args: str):
        channel_to_join_str = str(ctx.message.author.voice.channel)
     except:
         await ctx.send("User must join a channel with a bot perrmission to join to it.")
-        return
-
-    # remove old file
-    song_name = getNextFromSongPool()
-    song_there = os.path.isfile(song_name)
-    try:
-        if song_there:
-            os.remove(song_name)
-    except PermissionError:
-        await ctx.send("Wait for current music playing or use stop command")
         return
 
     # get voice channel
@@ -65,13 +57,17 @@ async def play(ctx, *args: str):
         }
         # download
         with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            ydl.download(["https://www.youtube.com" + song_object.get("url_suffix")])
-        for file in os.listdir("./"):
-            if file.endswith(".mp3") and file not in song_pool:
-                os.rename(file, song_name)
-        # play
-        voice.play(discord.FFmpegPCMAudio(song_name))
-        voice.source = discord.PCMVolumeTransformer(voice.source, volume=1.0)
+            loop = loop or asyncio.get_event_loop()
+            data = await loop.run_in_executor(None, lambda: ydl.extract_info("https://www.youtube.com" + song_object.get("url_suffix"), download=False))
+
+            if 'entries' in data:
+                # take first item from a playlist
+                data = data['entries'][0]
+
+            filename = data['url']
+            ydl.prepare_filename(data)
+            voice.play(discord.FFmpegPCMAudio(filename, **ffmpeg_options))
+            voice.source = discord.PCMVolumeTransformer(voice.source, volume=1.0)
 
 
 @client.command()
@@ -126,7 +122,6 @@ async def volume(ctx, volume_int):
         if volume_level > 10 or volume_level < 1:
             await ctx.send("enter valid value betweeen 1 and 10.")
             return
-        print(" VOLUME LEVEL IS " + str(volume_level))
         voice.source.volume = volume_level/10
     except Exception as e:
         await ctx.send("enter valid value betweeen 1 and 10.---" + str(e))
